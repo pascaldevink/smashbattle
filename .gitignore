@@ -22,5 +22,5 @@ SmashBattle.app
 smashbattle_tests
 install_manifest.txt
 CMakeCache.txt
-Makefile
+/Makefile
 CMakeFiles/
