@@ -16,7 +16,7 @@ Battle/Battle.vcxproj.user
 *~
 *.cmake
 Battle/battle
-smashbattle
+/smashbattle
 *.exe
 SmashBattle.app
 smashbattle_tests
@@ -25,3 +25,5 @@ CMakeCache.txt
 /Makefile
 CMakeFiles/
 *.dmg
+/docs
+/Doxyfile.old
