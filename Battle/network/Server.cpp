@@ -41,7 +41,8 @@ Server::Server()
 	  serverTime_(SDL_GetTicks()),
 	  ignoreClientInputUntil_(0),
 	  game_(NULL),
-	  udpsequence_(0)
+	  udpsequence_(0),
+	  set(NULL)
 {
 }
 
@@ -66,12 +67,12 @@ void Server::setLevel(std::string level) {
 void Server::initializeLevel() {
 	if (levelName_ == "") {
 		// A bit dirty to do this here, but it works :)
-		LevelSelect ls;
+		LevelSelect ls(*main_);
 		ls.run();
 		levelName_.assign(Level::LEVELS[ls.level].name);
 
 	}
-	level_.load(level_util::get_filename_by_name(levelName_).c_str());
+	level_->load(level_util::get_filename_by_name(levelName_).c_str());
 }
 
 void Server::registerServer() {
@@ -111,7 +112,7 @@ void Server::registerServer() {
 	serverToken_ = sha256randomhash;
 
 	rest::RegisterServer regsrv(serverToken_);
-	regsrv.put();
+	regsrv.put(*main_);
 }
 
 void Server::initializeGame(NetworkMultiplayer &game) {
@@ -122,9 +123,21 @@ Gameplay & Server::getGame() {
 	return *game_;
 }
 
+void Server::setMain(Main &main) 
+{
+	main_ = &main;
+	level_ = std::shared_ptr<::Level>(new Level(main));
+}
+
+Main & Server::getMain() {
+	return *main_;
+}
+
 void Server::listen() {
+
 	if (is_listening_)
 		return;
+
 
 	/* initialize SDL_net */
 	if (SDLNet_Init() == -1) {
@@ -232,10 +245,13 @@ void Server::poll() {
 	if (SDLNet_SocketReady(server)) {
 		sock = SDLNet_TCP_Accept(server);
 		if (sock) {
+
+			SDLNet_TCP_AddSocket(set, sock);
+
 			int nextId = 0;
 			for (; clients_.find(nextId) != clients_.end(); nextId++)
 				;
-			clients_[nextId] = std::shared_ptr<Client>(new Client(nextId, sock, this));
+			clients_[nextId] = std::shared_ptr<Client>(new Client(nextId, sock, this, *main_));
 
 			communicationTokens_[clients_[nextId]->getCommToken()] = nextId;
 
@@ -271,15 +287,16 @@ void Server::poll() {
 				while (client->parse())
 					;
 			} else {
+
+				SDLNet_TCP_DelSocket(set, client->socket());
+
 				// Close the old socket, even if it's dead... 
 				SDLNet_TCP_Close(client->socket());
 
 				// Mark for deletion
 				dead_clients.push_back(client->id());
 
-				log(format("Cleaned up client: %d\n", client->id()), Logger::Priority::INFO);
-
-				client->cleanup();
+				log(format("Cleaning up client: %d\n", client->id()), Logger::Priority::INFO);
 			}
 		}
 	}
@@ -291,6 +308,7 @@ void Server::poll() {
 		if (clients_[*i]->getState() >= Client::State::ACTIVE) {
 			anotherPlayerDisconnected = true;
 		}
+		clients_[*i]->cleanup();
 		communicationTokens_.erase(clients_[*i]->getCommToken());
 		clients_.erase(*i);
 	}
@@ -304,16 +322,21 @@ void Server::poll() {
 		sendAll(broadcast);
 	}
 
+	ServerState *newstate = getState()->check_self(*this);
+	if (newstate) {
+		setState(newstate);
+	}
+
 }
 
 /* create a socket set that has the server socket and all the client sockets */
 SDLNet_SocketSet Server::create_sockset() {
-	static SDLNet_SocketSet set = NULL;
-
+	// Somehow the approach where the set is constantly re-created appears to be
+	// not very thread-safe.
 	if (set)
-		SDLNet_FreeSocketSet(set);
+		return set;
 
-	set = SDLNet_AllocSocketSet(clients_.size() + 1);
+	set = SDLNet_AllocSocketSet(32);
 	if (!set) {
 		printf("SDLNet_AllocSocketSet: %s\n", SDLNet_GetError());
 		throw std::runtime_error("todo implement");
@@ -321,24 +344,21 @@ SDLNet_SocketSet Server::create_sockset() {
 
 	SDLNet_TCP_AddSocket(set, server);
 
-	for (map<int, std::shared_ptr<Client>>::iterator i = clients_.begin(); i != clients_.end(); i++)
-		SDLNet_TCP_AddSocket(set, i->second->socket());
-
-	return (set);
+	return set;
 }
 
 bool Server::active() {
-	if (!Server::getInstance().currentState_)
+	if (!currentState_)
 		return false;
 
-	return Server::getInstance().currentState_->type().find("ServerStateInactive") == std::string::npos;
+	return currentState_->type().find("ServerStateInactive") == std::string::npos;
 }
 
 bool Server::gameStarted() {
-	if (!Server::getInstance().currentState_)
+	if (!currentState_)
 		return false;
 
-	return Server::getInstance().currentState_->type().find("ServerStateGameStarted") != std::string::npos;
+	return currentState_->type().find("ServerStateGameStarted") != std::string::npos;
 }
 
 void Server::setState(const ServerState * const state) {
@@ -352,11 +372,25 @@ void Server::setState(const ServerState * const state) {
 	active();
 }
 
+const ServerState *Server::getState()
+{
+	return currentState_;
+}
+
 std::shared_ptr<Client> Server::getClientById(int client_id) {
 	if (clients_.find(client_id) != clients_.end())
 		return clients_[client_id];
 
 	throw std::runtime_error("client not found by id");
+}
+
+size_t Server::numJoinedClients() {
+	size_t num = 0;
+	for (map<int, std::shared_ptr<Client>>::iterator i = clients_.begin(); i != clients_.end(); i++)
+		if (i->second->getState() == Client::State::ACTIVE || i->second->getState() == Client::State::SPECTATING)
+			num++;
+
+	return num;
 }
 
 size_t Server::numActiveClients() {

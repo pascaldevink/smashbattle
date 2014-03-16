@@ -4,9 +4,9 @@
 
 class CharacterSelect {
 public:
-	CharacterSelect();
+	CharacterSelect(Main &main);
 
-	CharacterSelect(int max_possible_players, int required_num_players);
+	CharacterSelect(int max_possible_players, int required_num_players, Main &main);
 	
 	void run();
 
@@ -15,6 +15,8 @@ public:
 
 	bool player_joined[4];
 	int player_select[4];
+
+	int player_select_first = 0;
 
 	bool cancel;
 private:
@@ -51,4 +53,6 @@ private:
 	int frame;
 	int possible_players_;
 	int required_num_players_;
+
+	Main &main_;
 };

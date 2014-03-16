@@ -10,12 +10,10 @@
 
 class Gameplay {
 public:
-	Gameplay();
+	Gameplay(Main &main);
 	virtual ~Gameplay();
 
-	static int frame;
-
-	static Gameplay * instance;
+	int frame;
 
 	Level * level;
 
@@ -42,9 +40,9 @@ public:
 	bool is_countdown() { return countdown; }
 	void set_broadcast(std::string msg, int duration);
 
-protected:
 	virtual void initialize();
 	virtual void deinitialize();
+protected:
 
 	void reset_game();
 
@@ -72,7 +70,7 @@ protected:
 	void process_npc_collission();
 	void process_player_npc_collission();
 
-	void handle_pause_input(SDL_Event * event);
+	virtual void handle_pause_input(SDL_Event * event);
 	
 	Uint32 ticks_start;
 	
@@ -101,4 +99,6 @@ protected:
 
 	std::string broadcast_msg;
 	int broadcast_duration;
+
+	Main &main_;
 };

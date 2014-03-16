@@ -155,10 +155,6 @@ void ServerStateAcceptClients::execute_initializing(Uint32 servertime, Server &s
 	req.data.time = servertime;
 	client.send(req);
 
-	client.setState(Client::State::CHARACTER_REQUESTED);
-}
-void ServerStateAcceptClients::execute_character_requested(Uint32 servertime, Server &server, Client &client) const
-{
 	Level &level (server.getLevel());
 
 	// First send level with the id so he knows which one he is
@@ -171,31 +167,37 @@ void ServerStateAcceptClients::execute_character_requested(Uint32 servertime, Se
 
 
 	// Create player object for client, determine starting position from level
-	Player *newplayer = new Player (client.getCharacter(), client.getClientId());
-	GameInputStub *playerinput = new GameInputStub();
+	Player *newplayer = new Player (client.getCharacter(), client.getClientId(), server.getMain());
+	GameInputStub *playerinput = new GameInputStub(server.getMain());
 	newplayer->input = playerinput;
 	level_util::set_player_start(*newplayer, level);
 	newplayer->reset();
 
-	server_add_player(server, client, newplayer);
-	
+	server.getGame().add_player(newplayer);
 
-	std::cout << " Sending server ready command to client: " << client.getClientId() << std::endl;
+	client.setState(Client::State::CHARACTER_REQUESTED);
+}
+
+void ServerStateAcceptClients::execute_character_requested(Uint32 servertime, Server &server, Client &client) const
+{
+}
+
+void ServerStateAcceptClients::execute_character_initialized(Uint32 servertime, Server &server, Client &client) const
+{
+	auto &newplayer = player_util::get_player_by_id(server.getMain(), client.getClientId());
+
+	// Send new player it's position et.al.
+	CommandSetPlayerData playerpos;
+	player_util::set_position_data(playerpos, newplayer.number, server.getServerTime(), server.getUdpSeq(), newplayer);
+	client.send(playerpos);
+
+	// Notify everyone
+	server_add_player(server, client, &newplayer);
+	
 	CommandSetServerReady cmdrdy;
 	client.send(cmdrdy);
 
-	CommandSetBroadcastText broadcast;
-	broadcast.data.time = server.getServerTime();
-	string text("FUCK YOU");
-	strncpy(broadcast.data.text, text.c_str() , text.length());
-	broadcast.data.duration = 10000;
-	client.send(broadcast);
-
-
 	client.setState(Client::State::SERVERSIDE_READY);
-}
-void ServerStateAcceptClients::execute_character_initialized(Uint32 servertime, Server &server, Client &client) const
-{
 }
 void ServerStateAcceptClients::execute_serverside_ready(Uint32 servertime, Server &server, Client &client) const
 {
@@ -223,7 +225,7 @@ void ServerStateAcceptClients::execute_ready_for_positional_data(Uint32 serverti
 void ServerStateAcceptClients::execute_active(Uint32 servertime, Server &server, Client &client) const
 {
 	// For now the client is initialized (it knows the other players)
-	Player &player(player_util::get_player_by_id(client.getClientId()));
+	Player &player(player_util::get_player_by_id(server.getMain(), client.getClientId()));
 	if (player.is_dead) {
 
 		// Do something fancy here
@@ -309,14 +311,11 @@ void ServerStateAcceptClients::execute_gameupdate(Uint32 servertime, Server &ser
 
 void ServerStateAcceptClients::server_add_player(Server &server, Client &client, Player * const newplayer) const
 {
-	server.getGame().add_player(newplayer);
-
 	// Send client all other player positions
 	auto &players = *(server.getGame().players);
 	for (auto i= players.begin(); i!=players.end(); i++)
 	{
 		auto &player = **i;
-
 		if (player.number != client.getClientId())
 		{
 			// Send the client "add player" for others
@@ -347,8 +346,6 @@ void ServerStateAcceptClients::server_add_player(Server &server, Client &client,
 			broadcast.data.duration = 2000;
 			server.getClientById(player.number)->send(broadcast);
 		}
-
-
 
 		// Send the client player 's health
 		CommandSetHitPoints points;

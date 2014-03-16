@@ -3,7 +3,9 @@
 #include <stdexcept>
 #include "Player.h"
 #include "Level.h"
+#include "Graphics.h"
 
+#include <iostream>
 
 namespace level_util
 {
@@ -28,6 +30,7 @@ namespace level_util
 		int score = player.score;
 		player.reset();
 		player.score = score;
+		player.set_sprite((level.playerstart[idx].facing_right ? SPR_R : SPR_L));
 
 		if (++idx == 4)
 			idx = 0;

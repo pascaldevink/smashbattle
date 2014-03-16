@@ -6,6 +6,7 @@
 #include "NetworkMultiplayer.h"
 #include "Projectile.h"
 #include "Bomb.h"
+#include "Main.h"
 
 #include <sstream>
 
@@ -22,7 +23,8 @@ Client::Client(Client &&other)
 
 	  currentState_(Client::State::CONNECTING),
 	  commToken_(other.getCommToken()),
-	  lastUdpSeq_(0)
+	  lastUdpSeq_(0),
+	  main_(other.main_)
 {
 	// UDP initialize
 	if (!(p = SDLNet_AllocPacket(4096))) {
@@ -47,7 +49,7 @@ Client & Client::operator=(Client&& other)
 /**
  * Our intended constructor :P
  */
-Client::Client(int client_id, TCPsocket socket, Server * const server)
+Client::Client(int client_id, TCPsocket socket, Server * const server, Main &main)
 	: CommandProcessor(socket),
 	  
 	  client_id_(client_id),
@@ -61,7 +63,8 @@ Client::Client(int client_id, TCPsocket socket, Server * const server)
 
 	  currentState_(Client::State::CONNECTING),
 	  commToken_(rand_get()),
-	  lastUdpSeq_(0)
+	  lastUdpSeq_(0),
+	  main_(main)
 {
 	if (!(p = SDLNet_AllocPacket(4096))) {
 		fprintf(stderr, "SDLNet_AllocPacket: %s\n", SDLNet_GetError());
@@ -95,6 +98,8 @@ bool Client::process(std::unique_ptr<Command> command)
 			return process(dynamic_cast<CommandCommunicationTokenAck *>(cmd));
 		case Command::Types::SetClientReady:
 			return process(dynamic_cast<CommandSetClientReady *>(cmd));
+		case Command::Types::ApiPing:
+			return process(dynamic_cast<CommandApiPing *>(cmd));
 	}
 
 	return true;
@@ -123,6 +128,12 @@ bool Client::process(CommandSetCharacter *command)
 {
 	char character = command->data.character;
 	character_ = character;
+
+	auto &myplayer = player_util::get_player_by_id(main_, client_id_);
+
+	myplayer.character = character;
+
+	myplayer.set_sprites();
 
 	setState(Client::State::CHARACTER_INITIALIZED);
 
@@ -154,7 +165,7 @@ bool Client::process(CommandSetPlayerData *command)
 			player_util::set_player_data(player, *command);
 
 			// Account for lag
-			int processFrames = static_cast<int>(lag().avg() / static_cast<float>(Main::MILLISECS_PER_FRAME));
+			int processFrames = static_cast<int>(lag().avg() / static_cast<float>(main_.MILLISECS_PER_FRAME));
 			for (int i=0; i<processFrames; i++)
 				server_->getGame().move_player(player);
 
@@ -175,9 +186,14 @@ bool Client::process(CommandSetPlayerData *command)
 
 			player_util::set_position_data(data, updatedPlayer->number, server_->getServerTime(), server_->getUdpSeq(), *updatedPlayer);
 
-			auto client = server_->getClientById(player.number);
-			if (client->getState() >= Client::State::ACTIVE) {
-				client->send(data);
+			try {
+				auto client = server_->getClientById(player.number);
+				if (client->getState() >= Client::State::ACTIVE) {
+					client->send(data);
+				}
+			}
+			catch (std::runtime_error &err) {
+				// probably an udp packet received from a client that's already disconnected or something..
 			}
 		}
 	}
@@ -201,7 +217,7 @@ bool Client::process(CommandShotFired *command)
 			proj->distance_traveled = command->data.distance_travelled;
 
 			// Account for lag
-			int processFrames = static_cast<int>(lag().avg() / static_cast<float>(Main::MILLISECS_PER_FRAME));
+			int processFrames = static_cast<int>(lag().avg() / static_cast<float>(main_.MILLISECS_PER_FRAME));
 			for (int i=0; i<processFrames; i++)
 			{
 				if (!server_->getGame().process_gameplayobj(proj))
@@ -248,7 +264,7 @@ bool Client::process(CommandBombDropped *command)
 			GameplayObject *obj = player.create_bomb(command->data.x, command->data.y);
 
 			// Account for lag
-			int processFrames = static_cast<int>(lag().avg() / static_cast<float>(Main::MILLISECS_PER_FRAME));
+			int processFrames = static_cast<int>(lag().avg() / static_cast<float>(main_.MILLISECS_PER_FRAME));
 			for (int i=0; i<processFrames; i++)
 			{
 				if (!server_->getGame().process_gameplayobj(obj))
@@ -285,6 +301,8 @@ bool Client::process(CommandCommunicationTokenAck *command)
 	log(format("Client confirmation received for token"), Logger::Priority::CONSOLE);
 
 	setState(Client::State::CALCULATING_LAG);
+
+	return true;
 }
 
 bool Client::process(CommandSetClientReady *command)
@@ -294,6 +312,20 @@ bool Client::process(CommandSetClientReady *command)
 	// i.e. It's now safe to assume we can send UDP packets for other player's data
 	
 	setState(Client::State::READY_FOR_POSITIONAL_DATA);
+
+	return true;
+}
+
+bool Client::process(CommandApiPing *command)
+{
+	CommandApiPong pong;
+	pong.data.time = command->data.time;
+	pong.data.num_joined_players = '0' + server_->numJoinedClients();
+	pong.data.num_active_players = '0' + server_->numActiveClients();
+
+	send(pong);
+
+	return true;
 }
 
 void Client::send(Command &command)
@@ -334,7 +366,7 @@ void Client::send(Command &command)
 
 		int numsent = SDLNet_UDP_Send(server_->getUdpSocket(), -1, p); // This sets the p->channel
 		if(!numsent) {
-			printf("SDLNet_UDP_Send^1: %s (delivery to: %d)\n", SDLNet_GetError());
+			printf("SDLNet_UDP_Send^1: %s (delivery to: %d)\n", SDLNet_GetError(), -1);
 			// do something because we failed to send
 			// this may just be because no addresses are bound to the channel...
 			//exit(1);
@@ -365,19 +397,12 @@ void Client::send(Command &command)
 
 void Client::cleanup()
 {
+	CommandDelPlayer cmd;
+	cmd.data.time = server_->getServerTime();
+	cmd.data.client_id = client_id_;
+	server_->sendAll(cmd);
+
 	server_->getGame().del_player_by_id(client_id_);
-
-	auto playersvec = *(server_->getGame().players);
-	for (auto i = playersvec.begin(); i != playersvec.end(); i++)
-	{
-		auto &player = **i;
-		
-		CommandDelPlayer cmd;
-		cmd.data.time = server_->getServerTime();
-		cmd.data.client_id = client_id_;
-
-		server_->getClientById(player.number)->send(cmd);
-	}
 }
 
 }

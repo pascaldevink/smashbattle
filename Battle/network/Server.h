@@ -1,5 +1,7 @@
 #pragma once
 
+// #define ENABLE_EMBEDDED_SERVER
+
 #include <map>
 #include <memory>
 
@@ -27,10 +29,10 @@ class ServerState;
 class Server {
 public:
 
-	static Server& getInstance() {
-		static Server instance;
-		return instance;
-	}
+	Server();
+
+	void setMain(Main &main);
+	Main & getMain();
 
 	// Server listens
 	void listen();
@@ -38,13 +40,14 @@ public:
 	// Server polls clients
 	void poll();
 
-	static bool active();
-	static bool gameStarted();
+	bool active();
+	bool gameStarted();
 
 	void setState(const ServerState * const state);
+	const ServerState *getState();
 
 	Level &getLevel() {
-		return level_;
+		return *level_.get();
 	}
 
 	std::string getLevelName() {
@@ -70,6 +73,7 @@ public:
 
 	Gameplay &getGame();
 	std::shared_ptr<Client> getClientById(int client_id);
+	size_t numJoinedClients();
 	size_t numActiveClients();
 
 	void sendAll(Command &command);
@@ -103,7 +107,6 @@ public:
 	}
 	
 private:
-	Server();
 	~Server();
 
 	// Prevent copies of server
@@ -127,7 +130,7 @@ private:
 	Uint16 port_;
 	std::string servername_;
 
-	::Level level_;
+	std::shared_ptr<::Level> level_;
 	std::string levelName_;
 
 	NetworkMultiplayer *game_;
@@ -145,6 +148,8 @@ private:
 	short udpsequence_;
 
 	friend class ClientNetworkMultiplayer;
+
+	Main *main_;
 };
 
 }

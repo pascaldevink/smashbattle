@@ -9,6 +9,8 @@
 
 #include "util/LagMeasure.hpp"
 
+class Main;
+
 namespace network{
 
 class CommandPing;
@@ -20,6 +22,7 @@ class CommandShotFired;
 class CommandBombDropped;
 class CommandCommunicationTokenAck;
 class CommandSetClientReady;
+class CommandApiPing;
 class Server;
 
 /**
@@ -47,7 +50,7 @@ public:
 	};
 
 
-	Client(int client_id, TCPsocket socket, Server * const server);
+	Client(int client_id, TCPsocket socket, Server * const server, Main &main);
 	Client(Client &&other);
 	Client & operator=(Client&& other);
 	
@@ -62,6 +65,7 @@ public:
 	bool process(CommandBombDropped *command);
 	bool process(CommandCommunicationTokenAck *command);
 	bool process(CommandSetClientReady *command);
+	bool process(CommandApiPing *command);
 
 	// accessors
 	TCPsocket socket() { return socket_; }
@@ -112,6 +116,8 @@ private:
 	IPaddress address_;
 	
 	UDPpacket *p;
+	
+	Main &main_;
 };
 
 }

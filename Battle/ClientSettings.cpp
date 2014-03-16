@@ -3,9 +3,12 @@
 #include "Options.h"
 #include "PlayerAnimation.h"
 
-ClientSettings::ClientSettings()
-: OptionsScreen("SET UP YOUR CHARACTER"), character_(0), anim(new PlayerAnimation(0))
+ClientSettings::ClientSettings(Main &main)
+: OptionsScreen("SET UP YOUR CHARACTER", main), main_(main)
 {
+	character_ = (int) main.online_character;
+	anim = new PlayerAnimation(character_, main);
+	selectServerText_ = "SELECT SERVER";
 	initialize();
 }
 
@@ -37,7 +40,8 @@ void ClientSettings::item_selected()
 	switch (selected_item) {
 		case 0:
 		{
-			CharacterSelect cs(1, 1);
+			CharacterSelect cs(1, 1, main_);
+			cs.player_select_first = character_;
 			cs.run();
 
 			if (!cs.cancel) {
@@ -45,12 +49,13 @@ void ClientSettings::item_selected()
 				std::cout << anim->character << std::endl;
 
 				character_ = cs.player_select[0];
+				main_.online_character = (Uint8)character_;
 			}
 			break;
 		}
 		case 1:
 		{
-			network::ServerClient::getInstance().setCharacter(character_);
+			main_.getServerClient().setCharacter(character_);
 			connect();
 			break;
 		}
@@ -71,7 +76,7 @@ void ClientSettings::on_post_draw()
 	anim->position->x = 400;
 	anim->position->y = 68;
 	anim->direction = -1;
-	SDL_Surface *screen = Main::instance->screen;
+	SDL_Surface *screen = main_.screen;
 
 	char *name = Player::CHARACTERS[1].name;
 
@@ -94,7 +99,7 @@ void ClientSettings::create_items()
 	add_item(item);
 
 	item = new OptionItem();
-	item->name = "SELECT SERVER";
+	item->name = const_cast<char *>(selectServerText_.c_str());
 	item->options = NULL;
 	item->selected = 0;
 	add_item(item);
@@ -146,7 +151,7 @@ void ClientSettings::connect()
 	try {
 		json::Array servers = slist.list();
 
-		ServerListing listOpts(servers);
+		ServerListing listOpts(servers, main_);
 		listOpts.run();
 
 
@@ -158,15 +163,15 @@ void ClientSettings::connect()
 void ClientSettings::show_error(const std::string &error_msg)
 {
 
-	SDL_Surface *screen = Main::instance->screen;
+	SDL_Surface *screen = main_.screen;
 	SDL_FillRect(screen, NULL, SDL_MapRGB(screen->format, 0, 0, 0));
 	SDL_Event event;
 
 	while (true) {
 		while (SDL_PollEvent(&event)) {
-			Main::instance->handle_event(&event);
+			main_.handle_event(&event);
 			for (int i = 0; i < 4; i++) {
-				Main::instance->input[i]->handle_event(&event);
+				main_.input[i]->handle_event(&event);
 			}
 		}
 
@@ -178,11 +183,11 @@ void ClientSettings::show_error(const std::string &error_msg)
 		textpos += 24;
 		std::string error_msg_up = error_msg;
 		to_upper<char>(error_msg_up);
-		SDL_Surface* textSurface = Main::text->render_text_small(error_msg_up.c_str());
+		SDL_Surface* textSurface = main_.text->render_text_small(error_msg_up.c_str());
 
 		SDL_BlitSurface(textSurface, NULL, screen, &textLocation);
 		SDL_FreeSurface(textSurface);
 
-		Main::instance->flip(true);
+		main_.flip(true);
 	}
 }

@@ -64,17 +64,9 @@ Currently there are two projects:
 
 Simply launch a server:
 
-    smashbattle -s "BOULDERDASH" 1100 "Some server name here"
+    smashbattle -s "BOULDERDASH" 1100 "Some server name here" [ {true|false} ]
 
-If you want to run it on a box without X, you can use Xvfb, f.i.:
-
-    #!/bin/ksh93
-    Xvfb :5 -screen 5 1024x768x24 &
-    sleep 2
-    DISPLAY=:5 ./smashbattle -s "BOULDERDASH" 1600 "SNOW LEVEL - JENKINS BUILD RAY #$1"
-
-Currently the SDL stuff hasn't been refactored out of the server yet, so that's
-why we have to send the visuals to Xvfb.
+Optional parameter is no\_sdl flag
 
 ## Running client
 
@@ -82,7 +74,7 @@ why we have to send the visuals to Xvfb.
 
 Or use the shortcut (can be convenient when debugging):
 
-    smashbattle smashbattle://host:port
+    smashbattle -c host:port [ character_name ]
 
 ## Simply ksh script to debug server with multiple clients
 
@@ -94,15 +86,15 @@ Or use the shortcut (can be convenient when debugging):
     ./smashbattle -s "TRAINING DOJO" 1100 "RAY'S TRAINING SERVER" &
     sleep 3
     
-    ./smashbattle smashbattle://localhost:1100 2>&1 >>/dev/null &
+    ./smashbattle -c localhost:1100 2>&1 >>/dev/null &
     sleep 0.3
-    ./smashbattle smashbattle://localhost:1100 2>&1 >>/dev/null &
+    ./smashbattle -c localhost:1100 2>&1 >>/dev/null &
     sleep 0.3
-    ./smashbattle smashbattle://localhost:1100 2>&1 >>/dev/null &
+    ./smashbattle -c localhost:1100 2>&1 >>/dev/null &
     sleep 0.3
-    ./smashbattle smashbattle://localhost:1100 2>&1 >>/dev/null &
+    ./smashbattle -c localhost:1100 2>&1 >>/dev/null &
     sleep 0.3
-    ./smashbattle smashbattle://localhost:1100 2>&1 >>/dev/null &
+    ./smashbattle -c localhost:1100 2>&1 >>/dev/null &
     # etc....
 
     # You have one hour to kill everything with ctrl+c. :)
