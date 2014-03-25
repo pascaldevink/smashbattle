@@ -24,14 +24,19 @@
 CharacterSelect::CharacterSelect(Main &main)
 	: possible_players_(4),
 	  required_num_players_(2),
-	  main_(main)
+	  main_(main),
+	  SimpleDrawable(main),
+	  player_select_first(0)
 {
+	
 }
 
 CharacterSelect::CharacterSelect(int max_possible_players, int required_num_players, Main &main)
 	: possible_players_(max_possible_players),
 	  required_num_players_(required_num_players),
-	  main_(main)
+	  main_(main),
+	  SimpleDrawable(main),
+	  player_select_first(0)
 {
 }
 
@@ -407,7 +412,7 @@ void CharacterSelect::select(int player, int direction) {
 	}
 }
 
-void CharacterSelect::draw() {
+void CharacterSelect::draw_impl() {
 	SDL_Surface * screen;
 	SDL_Surface * surface;
 	SDL_Rect rect, rect_b, rect_c, rect_s;

@@ -109,6 +109,7 @@
     <ClCompile Include="commands\CommandGeneratePowerup.cpp" />
     <ClCompile Include="ControlsOptions.cpp" />
     <ClCompile Include="DoubleDamagePowerUp.cpp" />
+    <ClCompile Include="Drawable.cpp" />
     <ClCompile Include="GameInput.cpp" />
     <ClCompile Include="Gameplay.cpp" />
     <ClCompile Include="GameplayObject.cpp" />
@@ -150,6 +151,7 @@
     <ClCompile Include="rest\ServerToken.cpp" />
     <ClCompile Include="ServerListing.cpp" />
     <ClCompile Include="ShieldPowerUp.cpp" />
+    <ClCompile Include="SimpleDrawable.cpp" />
     <ClCompile Include="states\ServerState.cpp" />
     <ClCompile Include="states\ServerStateAcceptClients.cpp" />
     <ClCompile Include="states\ServerStateAcceptSpectatingClients.cpp" />
@@ -180,6 +182,8 @@
     <ClInclude Include="ChickNPC.h" />
     <ClInclude Include="ClientSettings.h" />
     <ClInclude Include="commands\CommandAddPlayer.hpp" />
+    <ClInclude Include="commands\CommandApiPing.hpp" />
+    <ClInclude Include="commands\CommandApiPong.hpp" />
     <ClInclude Include="commands\CommandApplyPowerup.hpp" />
     <ClInclude Include="commands\CommandBombDropped.hpp" />
     <ClInclude Include="commands\CommandCommunicationTokenAck.hpp" />
@@ -189,6 +193,7 @@
     <ClInclude Include="commands\CommandPong.hpp" />
     <ClInclude Include="commands\CommandRemovePowerup.hpp" />
     <ClInclude Include="commands\CommandRequestCharacter.hpp" />
+    <ClInclude Include="commands\CommandServerFull.hpp" />
     <ClInclude Include="commands\CommandSetBroadcastText.hpp" />
     <ClInclude Include="commands\CommandSetCharacter.hpp" />
     <ClInclude Include="commands\CommandSetClientReady.hpp" />
@@ -208,6 +213,7 @@
     <ClInclude Include="commands\CommandUpdateTile.hpp" />
     <ClInclude Include="ControlsOptions.h" />
     <ClInclude Include="DoubleDamagePowerUp.h" />
+    <ClInclude Include="Drawable.h" />
     <ClInclude Include="GameInput.h" />
     <ClInclude Include="Gameplay.h" />
     <ClInclude Include="GameplayObject.h" />
@@ -251,6 +257,7 @@
     <ClInclude Include="rest\ServerToken.h" />
     <ClInclude Include="ServerListing.h" />
     <ClInclude Include="ShieldPowerUp.h" />
+    <ClInclude Include="SimpleDrawable.h" />
     <ClInclude Include="states\ServerState.h" />
     <ClInclude Include="states\ServerStateAcceptClients.h" />
     <ClInclude Include="states\ServerStateAcceptSpectatingClients.h" />

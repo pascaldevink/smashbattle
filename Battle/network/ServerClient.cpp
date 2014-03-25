@@ -195,16 +195,13 @@ void ServerClient::poll()
 	{
 		resumeGameTime_ = 0;
 
-		game_->set_ended(false);
-		if (resumeGameWithCountdown_)
-			game_->set_countdown(true, 3 + 1);
-
 		// Clear gameplay objects, powerups excluded, these are destroyed by command on the server
 		std::vector<GameplayObject *> deleteObjs;
 		for_each(begin(*game_->objects), end(*game_->objects), [&] (GameplayObject *obj) { 
 			if (!obj->is_powerup)
 				deleteObjs.push_back(obj); 
 		});
+		
 		for_each(begin(deleteObjs), end(deleteObjs), [&] (GameplayObject *obj) { 
 			auto &objects = (*game_->objects);
 			auto iter = std::find(begin(objects), end(objects), obj);
@@ -212,6 +209,11 @@ void ServerClient::poll()
 			if (iter != end(objects))
 				objects.erase(iter);
 		});
+
+		game_->set_ended(false);
+		if (resumeGameWithCountdown_)
+			game_->set_countdown(true, 3 + 1);
+
 	}
 
 
@@ -259,7 +261,9 @@ void ServerClient::send(Command &command)
 	char type = command.getType();
 	if (type == Command::Types::SetPlayerData ||
 		type == Command::Types::Ping ||
-		type == Command::Types::Pong
+		type == Command::Types::Pong ||
+		type == Command::Types::ShotFired ||
+		type == Command::Types::BombDropped
 	){
 		log(format("Send packet of type %d through UDP with seq %d", type, getUdpSeq()), Logger::Priority::CONSOLE);
 
@@ -287,7 +291,7 @@ void ServerClient::send(Command &command)
 
 		if (result < sizeof (char)) {
 			if (SDLNet_GetError() && strlen(SDLNet_GetError())) /* sometimes blank! */
-				printf("SDLNet_TCP_Send: %s\n", SDLNet_GetError());
+				printf("SDLNet_TCP_Send^3: %s\n", SDLNet_GetError());
 			return;
 		}
 
@@ -295,7 +299,7 @@ void ServerClient::send(Command &command)
 
 		if (result < sizeof (char)) {
 			if (SDLNet_GetError() && strlen(SDLNet_GetError())) /* sometimes blank! */
-				printf("SDLNet_TCP_Send: %s\n", SDLNet_GetError());
+				printf("SDLNet_TCP_Send^4: %s\n", SDLNet_GetError());
 			return;
 		}
 	}
@@ -404,6 +408,9 @@ bool ServerClient::process(std::unique_ptr<Command> command)
 			break;
 		case Command::Types::SetSpectating:
 			process(dynamic_cast<CommandSetSpectating *>(command.get()));
+			break;
+		case Command::Types::ServerFull:
+			process(dynamic_cast<CommandServerFull *>(command.get()));
 			break;
 		default:
 			log(format("received command with type: %d", command.get()->getType()), Logger::Priority::CONSOLE);
@@ -547,20 +554,26 @@ bool ServerClient::process(CommandUpdateTile *command)
 
 bool ServerClient::process(CommandShotFired *command)
 {
-	auto &otherplayer = player_util::get_player_by_id(*main_, command->data.client_id);
+	try {
+		auto &otherplayer = player_util::get_player_by_id(*main_, command->data.client_id);
 
-	if (otherplayer.number == command->data.client_id) {
-		// Make sure the correct sprite is set, so the bullet will go the correct direction
-		otherplayer.current_sprite = command->data.current_sprite;
+		if (otherplayer.number == command->data.client_id) {
+			// Make sure the correct sprite is set, so the bullet will go the correct direction
+			otherplayer.current_sprite = command->data.current_sprite;
 
-		Projectile *proj = otherplayer.create_projectile(command->data.x, command->data.y);
+			Projectile *proj = otherplayer.create_projectile(command->data.x, command->data.y);
 
-		proj->distance_traveled = command->data.distance_travelled;
+			proj->distance_traveled = command->data.distance_travelled;
 
-		// Account for lag
-		int processFrames = static_cast<int>(lag.avg() / static_cast<float>(main_->MILLISECS_PER_FRAME));
-		for (int i=0; i<processFrames; i++)
-			game_->process_gameplayobj(proj);
+			// Account for lag
+			int processFrames = static_cast<int>(lag.avg() / static_cast<float>(main_->MILLISECS_PER_FRAME));
+			for (int i=0; i<processFrames; i++)
+				game_->process_gameplayobj(proj);
+		}
+	}
+	catch (std::runtime_error &err) {
+		// UDP packet received while we don't know the player yet,
+		// do not propagate the exception
 	}
 
 	return true;
@@ -623,6 +636,7 @@ bool ServerClient::process(CommandSetPlayerAmmo *command)
 
 bool ServerClient::process(CommandSetBroadcastText *command)
 {
+	std::cout << "BROADCAST TEXT: " << command->data.text << std::endl;
 	getGame().set_broadcast(command->data.text, command->data.duration);
 	return true;
 }
@@ -798,6 +812,24 @@ bool ServerClient::process(CommandSetSpectating *command)
 		player_->spectate(command->data.is_spectating);
 		player_->is_dead = command->data.is_spectating;
 		
+	}
+	catch (std::runtime_error &err) 
+	{
+		log(format("failure in process(CommandSetSpectating): %s", err.what()), Logger::Priority::ERROR);
+	}
+
+	return true;
+}
+
+bool ServerClient::process(CommandServerFull *command)
+{
+	try {
+		game_->del_other_players();
+
+		disconnect();
+
+		return false;
+
 	}
 	catch (std::runtime_error &err) 
 	{

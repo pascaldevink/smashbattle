@@ -2,12 +2,18 @@
 
 ; HM NIS Edit Wizard helper defines
 !define PRODUCT_NAME "Tweak Battle"
-!define PRODUCT_VERSION "0.1-alpha"
+!ifndef PRODUCT_VERSION
+!define PRODUCT_VERSION "0.1alpha"
+!endif
 !define PRODUCT_PUBLISHER "Tweakers.net"
 !define PRODUCT_WEB_SITE "https://github.com/DemonTPx/smashbattle"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\Battle.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define PRODUCT_UNINST_ROOT_KEY "HKLM"
+
+!ifndef OUT_FILENAME
+!define OUT_FILENAME "tweakbattle-setup.exe"
+!endif
 
 ; MUI 1.67 compatible ------
 !include "MUI.nsh"
@@ -39,7 +45,7 @@
 ; MUI end ------
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
-OutFile "tweakbattle-setup.exe"
+OutFile "${OUT_FILENAME}"
 InstallDir "$PROGRAMFILES\Tweak Battle"
 InstallDirRegKey HKLM "${PRODUCT_DIR_REGKEY}" ""
 ShowInstDetails show
@@ -48,24 +54,24 @@ ShowUnInstDetails show
 Section "MainSection" SEC01
   SetOutPath "$INSTDIR"
   SetOverwrite try
-  File "vcredist_x86.exe"
+  File "$%SMASHBATTLE_LIB%\vcredist_x86.exe"
   ExecWait "$INSTDIR\vcredist_x86.exe /q"
+  File "$%SMASHBATTLE_LIB%\libcurl.dll"
+  File "$%SMASHBATTLE_LIB%\libFLAC-8.dll"
+  File "$%SMASHBATTLE_LIB%\libmikmod-2.dll"
+  File "$%SMASHBATTLE_LIB%\libogg-0.dll"
+  File "$%SMASHBATTLE_LIB%\libvorbis-0.dll"
+  File "$%SMASHBATTLE_LIB%\libvorbisfile-3.dll"
+  File "$%SMASHBATTLE_LIB%\SDL.dll"
+  File "$%SMASHBATTLE_LIB%\SDL_mixer.dll"
+  File "$%SMASHBATTLE_LIB%\SDL_net.dll"
+  File "$%SMASHBATTLE_LIB%\smpeg.dll"
+  File "$%SMASHBATTLE_LIB%\zlib1.dll"
   File "Release\Battle.exe"
   CreateDirectory "$SMPROGRAMS\Tweak Battle"
   CreateShortCut "$SMPROGRAMS\Tweak Battle\Tweak Battle.lnk" "$INSTDIR\Battle.exe" "-f"
   CreateShortCut "$SMPROGRAMS\Tweak Battle\Tweak Battle (Windowed mode).lnk" "$INSTDIR\Battle.exe"
   CreateShortCut "$DESKTOP\Tweak Battle.lnk" "$INSTDIR\Battle.exe"
-  File "Release\libcurl.dll"
-  File "Release\libFLAC-8.dll"
-  File "Release\libmikmod-2.dll"
-  File "Release\libogg-0.dll"
-  File "Release\libvorbis-0.dll"
-  File "Release\libvorbisfile-3.dll"
-  File "Release\SDL.dll"
-  File "Release\SDL_mixer.dll"
-  File "Release\SDL_net.dll"
-  File "Release\smpeg.dll"
-  File "Release\zlib1.dll"
   SetOutPath "$INSTDIR\gfx"
   SetOverwrite try
   File "Battle\gfx\arjen.bmp"

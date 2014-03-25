@@ -31,6 +31,7 @@ using std::string;
 #include "util/stringutils.hpp"
 #include "util/sha256.h"
 #include "util/Log.h"
+#include "Client.h"
 
 namespace network {
 
@@ -42,7 +43,9 @@ Server::Server()
 	  ignoreClientInputUntil_(0),
 	  game_(NULL),
 	  udpsequence_(0),
-	  set(NULL)
+	  set(NULL),
+	  lastUpdateInApiTime_(serverTime_),
+	  lastNumActivePlayers_(0)
 {
 }
 
@@ -138,7 +141,6 @@ void Server::listen() {
 	if (is_listening_)
 		return;
 
-
 	/* initialize SDL_net */
 	if (SDLNet_Init() == -1) {
 		log(format("SDLNet_Init: %s\n", SDLNet_GetError()), Logger::Priority::FATAL);
@@ -190,9 +192,20 @@ void Server::listen() {
 
 void Server::poll() {
 
+	// Update servertime
+	serverTime_ = SDL_GetTicks();
+
 	if (!is_listening_)
 		return;
 
+	// Every 10 seconds send update to API, or earlier if num active players changed
+	if (!lastUpdateInApiTime_ || serverTime_ - lastUpdateInApiTime_ >= 10000 || lastNumActivePlayers_ != numActiveClients()) {
+		rest::RegisterServer regsrv(serverToken_);
+		regsrv.update(*main_);
+		lastUpdateInApiTime_ = serverTime_;
+		lastNumActivePlayers_ = numActiveClients();
+	}
+	
 	set = create_sockset();
 
 	while (SDLNet_UDP_Recv(sd, p)) {
@@ -223,9 +236,6 @@ void Server::poll() {
 		client->parse_udp(p->len - sizeof (Uint32), temp);
 	}
 
-	// Update servertime
-	serverTime_ = SDL_GetTicks();
-
 	for (map<int, std::shared_ptr<Client>>::iterator i = clients_.begin(); i != clients_.end(); i++) {
 		auto & client = i->second;
 		currentState_->execute(*this, *client);
@@ -246,11 +256,19 @@ void Server::poll() {
 		sock = SDLNet_TCP_Accept(server);
 		if (sock) {
 
-			SDLNet_TCP_AddSocket(set, sock);
-
 			int nextId = 0;
 			for (; clients_.find(nextId) != clients_.end(); nextId++)
 				;
+
+			if (nextId >= 4) {
+				log(format("New client connected with id: %d [DENIED >= 4]\n", nextId), Logger::Priority::INFO);
+				SDLNet_TCP_Close(sock);
+				return;
+			}
+
+			// We now re-create the socket set every iteration
+			//SDLNet_TCP_AddSocket(set, sock);
+
 			clients_[nextId] = std::shared_ptr<Client>(new Client(nextId, sock, this, *main_));
 
 			communicationTokens_[clients_[nextId]->getCommToken()] = nextId;
@@ -264,6 +282,7 @@ void Server::poll() {
 				printf("This may be a server socket.\n");
 			} else {
 				// Bind address to the first free channel
+				SDLNet_UDP_Unbind(sd, nextId);
 				int channel = SDLNet_UDP_Bind(sd, nextId, remote_ip);
 				if (channel == -1) {
 					printf("SDLNet_UDP_Bind: %s\n", SDLNet_GetError());
@@ -288,7 +307,8 @@ void Server::poll() {
 					;
 			} else {
 
-				SDLNet_TCP_DelSocket(set, client->socket());
+				// We now re-create the socket set every iteration
+				// SDLNet_TCP_DelSocket(set, client->socket());
 
 				// Close the old socket, even if it's dead... 
 				SDLNet_TCP_Close(client->socket());
@@ -305,7 +325,9 @@ void Server::poll() {
 	bool anotherPlayerDisconnected = false;
 	for (vector<int>::iterator i = dead_clients.begin(); i != dead_clients.end(); i++) {
 		// Verify with a breakpoint if this is correct code...
-		if (clients_[*i]->getState() >= Client::State::ACTIVE) {
+		if (clients_[*i]->getState() == Client::State::ACTIVE || 
+			clients_[*i]->getState() == Client::State::ACTIVE) 
+		{
 			anotherPlayerDisconnected = true;
 		}
 		clients_[*i]->cleanup();
@@ -331,18 +353,26 @@ void Server::poll() {
 
 /* create a socket set that has the server socket and all the client sockets */
 SDLNet_SocketSet Server::create_sockset() {
-	// Somehow the approach where the set is constantly re-created appears to be
-	// not very thread-safe.
-	if (set)
-		return set;
 
-	set = SDLNet_AllocSocketSet(32);
-	if (!set) {
-		printf("SDLNet_AllocSocketSet: %s\n", SDLNet_GetError());
-		throw std::runtime_error("todo implement");
-	}
+
+	if (set)
+		SDLNet_FreeSocketSet(set);
+
+	set = SDLNet_AllocSocketSet(clients_.size() + 1);
 
 	SDLNet_TCP_AddSocket(set, server);
+
+	std::map<int, std::shared_ptr<Client>>::iterator i;
+	for (i=std::begin(clients_); i!=std::end(clients_); i++) {
+		std::shared_ptr<Client> &client = (*i).second;
+
+		SDLNet_TCP_AddSocket(set, client->socket());
+	}
+
+	if (!set) {
+		printf("SDLNet_AllocSocketSet: %s\n", SDLNet_GetError());
+		throw std::runtime_error("problem");
+	}
 
 	return set;
 }

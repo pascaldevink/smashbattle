@@ -66,10 +66,6 @@ void ServerStateAcceptClients::execute(Server &server, Client &client) const
 		return;
 	}
 
-	if (client.getClientId() == 3) {
-		std::cout << " client: " << client.getClientId() << " state " << client.getState() << std::endl;
-	}
-
 	switch(client.getState())
 	{
 		// Request character from client
@@ -220,7 +216,14 @@ void ServerStateAcceptClients::execute_ready_for_positional_data(Uint32 serverti
 		}
 	}
 	
-	client.setState(Client::State::ACTIVE);
+	if (server.numActiveClients() < 4) {
+		client.setState(Client::State::ACTIVE);
+	} else {
+		client.setState(Client::State::DENIED);
+		CommandServerFull full;
+		full.data.time = servertime;
+		client.send(full);
+	}
 }
 void ServerStateAcceptClients::execute_active(Uint32 servertime, Server &server, Client &client) const
 {

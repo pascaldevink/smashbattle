@@ -7,6 +7,7 @@
 #include "Projectile.h"
 #include "Bomb.h"
 #include "Main.h"
+#include "Client.h"
 
 #include <sstream>
 
@@ -157,10 +158,11 @@ bool Client::process(CommandSetPlayerData *command)
 			// A following sequence is valid if it's bigger than the lastSeq.
 			// But it's also valid if it's smaller, (i.e. wrapped, short is overflown). That's where 
 			//  the check if the difference is in that case > sizeof(short) / 2)..
-			if ( ! ((currSeq > lastSeq || (currSeq < lastSeq && (lastSeq-currSeq)) > (sizeof(short)/2)))) {
+			if (((currSeq < lastSeq && (lastSeq-currSeq)) > (sizeof(short)/2))) {
 				log(format("sequence, discarding because of more recent package existant. %d < %d\n", currSeq, lastSeq), Logger::Priority::INFO);
 				continue;
 			}
+			server_->getClientById(player.number)->setLastUdpSeq(currSeq);
 
 			player_util::set_player_data(player, *command);
 
@@ -188,7 +190,9 @@ bool Client::process(CommandSetPlayerData *command)
 
 			try {
 				auto client = server_->getClientById(player.number);
-				if (client->getState() >= Client::State::ACTIVE) {
+				if (client->getState() == Client::State::ACTIVE ||
+					client->getState() == Client::State::SPECTATING
+				) {
 					client->send(data);
 				}
 			}
@@ -334,7 +338,9 @@ void Client::send(Command &command)
 	
 	if (type == Command::Types::SetPlayerData ||
 		type == Command::Types::Ping ||
-		type == Command::Types::Pong
+		type == Command::Types::Pong ||
+		type == Command::Types::ShotFired ||
+		type == Command::Types::BombDropped
 	){
 		log(format("Sending to client %d packet of type 0x%x over UDP with seq %d", client_id_, type, getUdpSeq()), Logger::Priority::DEBUG);
 		size_t packetsize = command.getDataLen() + 1;
@@ -381,15 +387,15 @@ void Client::send(Command &command)
 
 		if(result < sizeof(char)) {
 			if(SDLNet_GetError() && strlen(SDLNet_GetError())) /* sometimes blank! */
-				log(format("SDLNet_TCP_Send: %s\n", SDLNet_GetError()), Logger::Priority::FATAL);
+				log(format("SDLNet_TCP_Send^1: %s\n", SDLNet_GetError()), Logger::Priority::FATAL);
 			return;
 		}
 
 		result = SDLNet_TCP_Send(socket_, command.getData(), command.getDataLen());
 
-		if(result < sizeof(socket_)) {
+		if(result < sizeof(command.getDataLen())) {
 			if(SDLNet_GetError() && strlen(SDLNet_GetError())) /* sometimes blank! */
-				log(format("SDLNet_TCP_Send: %s\n", SDLNet_GetError()), Logger::Priority::FATAL);
+				log(format("SDLNet_TCP_Send^2: %s\n", SDLNet_GetError()), Logger::Priority::FATAL);
 			return;
 		}
 	}

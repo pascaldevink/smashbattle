@@ -68,6 +68,7 @@ public:
 	void initializeGame(NetworkMultiplayer &);
 
 	Uint32 getServerTime() {
+		serverTime_ = SDL_GetTicks();
 		return serverTime_;
 	}
 
@@ -139,6 +140,9 @@ private:
 
 	Uint32 serverTime_;
 	Uint32 ignoreClientInputUntil_;
+
+	Uint32 lastUpdateInApiTime_;
+	size_t lastNumActivePlayers_;
 
 	std::string serverToken_;
 

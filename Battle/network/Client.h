@@ -46,7 +46,8 @@ public:
 		SERVERSIDE_READY,
 		READY_FOR_POSITIONAL_DATA,
 		ACTIVE,
-		SPECTATING
+		SPECTATING,
+		DENIED
 	};
 
 
@@ -86,6 +87,7 @@ public:
 	
 	Uint32 getCommToken() { return commToken_; }
 	short getLastUdpSeq() { return lastUdpSeq_; }
+	void setLastUdpSeq(short seq) { lastUdpSeq_ = seq; }
 
 	// lag
 	Uint32 getLastLagTime() { return lastLagTime_; }

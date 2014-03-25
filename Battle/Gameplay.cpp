@@ -24,6 +24,7 @@ Gameplay::Gameplay(Main &main) : main_(main) {
 	ticks_start = SDL_GetTicks();
 	
 	game_running = false;
+	server_game_running = false;
 	players = new std::vector<Player*>();
 	npcs = new std::vector<NPC*>();
 	objects = new std::vector<GameplayObject*>();
@@ -33,6 +34,8 @@ Gameplay::Gameplay(Main &main) : main_(main) {
 	players_npcs_collide = true;
 
 	broadcast_duration = 0;
+
+	disconnected_time_ = 0;
 }
 
 Gameplay::~Gameplay() {
@@ -42,6 +45,7 @@ Gameplay::~Gameplay() {
 #include <map>
 using std::map;
 #include "network/Client.h"
+#include "network/Server.h"
 
 void Gameplay::run() {
 	SDL_Event event;
@@ -67,7 +71,7 @@ void Gameplay::run() {
 	// Get ticks (milliseconds since SDL started)
 	ticks_start = SDL_GetTicks();
 
-	while(main_.running && game_running) {
+	while(main_.running && (game_running || server_game_running)) {
 		if (!main_.no_sdl) {
 			// Event handling
 			while(SDL_PollEvent(&event)) {
@@ -155,29 +159,33 @@ void Gameplay::run() {
 		}
 
 		// Drawing
-		level->draw(screen, frames_processed);
+		if (!main_.no_sdl) {
+			level->draw(screen, frames_processed);
 
-		for(unsigned int idx = 0; idx < players->size(); idx++) {
-			Player * p = players->at(idx);
-			if(countdown)
-				p->draw(screen, true, frames_processed);
-			else
-				p->draw(screen, false, frames_processed);
-		}
-		for(unsigned int idx = 0; idx < npcs->size(); idx++) {
-			NPC * npc = npcs->at(idx);
-			npc->draw(screen, frames_processed);
-		}
+			for(unsigned int idx = 0; idx < players->size(); idx++) {
+				Player * p = players->at(idx);
+				if(countdown)
+					p->draw(screen, true, frames_processed);
+				else
+					p->draw(screen, false, frames_processed);
+			}
+			for(unsigned int idx = 0; idx < npcs->size(); idx++) {
+				NPC * npc = npcs->at(idx);
+				npc->draw(screen, frames_processed);
+			}
 
-		for(unsigned int idx = 0; idx < objects->size(); idx++) {
-			GameplayObject * obj = objects->at(idx);
-			obj->draw(screen, frames_processed);
-		}
+			for(unsigned int idx = 0; idx < objects->size(); idx++) {
+				GameplayObject * obj = objects->at(idx);
+				obj->draw(screen, frames_processed);
+			}
 
-		draw_score();
+			draw_score();
+		}
 		
 		if(ended) {
-			draw_game_ended();
+			if (!main_.no_sdl) {
+				draw_game_ended();
+			}
 
 			if (main_.runmode == MainRunModes::CLIENT) {
 				// reset games are handled by server
@@ -187,18 +195,32 @@ void Gameplay::run() {
 			}
 		}
 		if(countdown) {
-			draw_countdown();
+			if (!main_.no_sdl) {
+				draw_countdown();
+			}
 		}
 
 		if (main_.runmode == MainRunModes::CLIENT)
 		{
-			if (!main_.getServerClient().isConnected())
+			if (!main_.getServerClient().isConnected()) {
 				draw_disconnected();
+				if (disconnected_time_ == 0) {
+					disconnected_time_ = main_.getServer().getServerTime();
+				}
+				else {
+					if ((main_.getServer().getServerTime() - disconnected_time_) >= 3000) {
+						disconnected_time_ = 0;
+						break;
+					}
+				}
+			}
 			else if (main_.getServerClient().showConsole())
 				draw_console();
 		}
 
-		draw_broadcast();
+		if (!main_.no_sdl) {
+			draw_broadcast();
+		}
 		if (broadcast_duration > 0) {
 			for (int i=0; i<frames_processed; i++) {
 				broadcast_duration -= main_.MILLISECS_PER_FRAME;
@@ -372,6 +394,17 @@ void Gameplay::del_player_by_id(char number)
 			return;
 		}
 	}
+}
+
+void Gameplay::del_players()
+{
+	players->clear();
+}
+
+void Gameplay::del_other_players()
+{
+	while (players->size() > 1)
+		players->erase(players->begin()++);
 }
 
 void Gameplay::add_npc(NPC * npc) {
