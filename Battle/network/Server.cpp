@@ -79,6 +79,8 @@ void Server::initializeLevel() {
 }
 
 void Server::registerServer() {
+#ifndef SKIP_SERVER_TOKEN_PROCESS
+
 	if (serverToken_.empty()) {
 		rest::ServerToken token;
 		try {
@@ -115,6 +117,10 @@ void Server::registerServer() {
 	serverToken_ = sha256randomhash;
 
 	rest::RegisterServer regsrv(serverToken_);
+#else
+	rest::RegisterServer regsrv("NO TOKEN");
+#endif
+
 	regsrv.put(*main_);
 }
 
@@ -338,7 +344,7 @@ void Server::poll() {
 	if (anotherPlayerDisconnected) {
 		CommandSetBroadcastText broadcast;
 		broadcast.data.time = getServerTime();
-		string text("ANOTHER PLAYER DISCONNECTED");
+		string text("A PLAYER LEFT THE GAME");
 		strncpy(broadcast.data.text, text.c_str(), text.length());
 		broadcast.data.duration = 2000;
 		sendAll(broadcast);
