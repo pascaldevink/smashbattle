@@ -1,0 +1,12 @@
+#!/bin/bash
+
+#
+# gfx, music, sfx
+#
+
+cd "${0%/*}"
+sudo mkdir -p /usr/share/games/smashbattle
+sudo cp -r SmashBattle.app/Contents/MacOS/gfx /usr/share/games/smashbattle/gfx
+sudo cp -r SmashBattle.app/Contents/MacOS/music /usr/share/games/smashbattle/music
+sudo cp -r SmashBattle.app/Contents/MacOS/sfx /usr/share/games/smashbattle/sfx
+sudo cp -r SmashBattle.app/Contents/MacOS/stage /usr/share/games/smashbattle/stage

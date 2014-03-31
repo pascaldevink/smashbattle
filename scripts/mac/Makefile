@@ -22,7 +22,7 @@ NAME ?= SmashBattle
 VERSION ?= 1.0
 
 SOURCE_DIR ?= ../../
-SOURCE_FILES ?= SmashBattle.app
+SOURCE_FILES ?= SmashBattle.app mac_install
 
 TEMPLATE_DMG ?= template.dmg
 

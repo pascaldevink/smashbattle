@@ -5,7 +5,7 @@
   <key>CFBundleGetInfoString</key>
   <string>SmashBattle</string>
   <key>CFBundleExecutable</key>
-  <string>smashbattle</string>
+  <string>launcher</string>
   <key>CFBundleIdentifier</key>
   <string>net.tweakers.www</string>
   <key>CFBundleName</key>
