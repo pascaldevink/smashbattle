@@ -4,12 +4,12 @@
 
 namespace network{
 
-class CommandSetVictoryScreen : public Command
+class CommandKeepAlive : public Command
 {
 public:
 
-	CommandSetVictoryScreen () : Command(Command::Types::SetVictoryScreen) { }
-	~CommandSetVictoryScreen() {	}
+	CommandKeepAlive () : Command(Command::Types::KeepAlive) { }
+	~CommandKeepAlive() {	}
 
 	virtual void * getData() { return &data; };
 	virtual size_t getDataLen() { return sizeof(data); };
@@ -17,8 +17,6 @@ public:
 	struct
 	{
 		Uint32 time;
-		Uint32 duration;
-		short winner;
 	} data;
 
 private:

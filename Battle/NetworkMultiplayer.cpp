@@ -6,6 +6,7 @@
 #include "network/Commands.hpp"
 
 #include <map>
+#include <memory>
 #include <string>
 using std::string;
 using std::map;
@@ -25,6 +26,8 @@ using std::map;
 #include "Main.h"
 #include "commands/CommandSetBroadcastText.hpp"
 #include "commands/CommandSetVictoryScreen.hpp"
+#include "commands/CommandKeepAlive.hpp"
+#include "commands/CommandSetHitPoints.hpp"
 
 NetworkMultiplayer::NetworkMultiplayer (Main &main) 
 : LocalMultiplayer(main), currentState_(State::DONE), currentStateBeginTime_(main.getServer().getServerTime())
@@ -115,6 +118,8 @@ void NetworkMultiplayer::on_post_processing()
 			playerWasDead[player.number] = player.is_dead;
 		}
 
+		process_keep_alives();
+
 		// do normal post processing
 		LocalMultiplayer::on_post_processing();
 
@@ -128,6 +133,12 @@ void NetworkMultiplayer::on_post_processing()
 				died.data.client_id = player.number;
 				died.data.is_dead = player.is_dead;
 				server.sendAll(died);
+				
+				network::CommandSetHitPoints hp;
+				hp.data.time = server.getServerTime();
+				hp.data.client_id = player.number;
+				hp.data.hitpoints = player.hitpoints;
+				server.sendAll(hp);
 			}
 		}
 
@@ -189,16 +200,36 @@ void NetworkMultiplayer::on_post_processing()
 					currentStateBeginTimeDelay_ = 2000;
 				}
 				else {
+					// This is duplicate logic with.. search for "@MARK:1", the code is different
+					int highest_score = 0;
+					int winner = -1;
+					
+					auto &players = *server.getGame().players;
+					std::vector<Player *>::iterator i = std::begin(players);
+					int playerVectorIndex = 0, vectorIndex = 0;
+					for (; i!=std::end(players); ++i) {
+						auto &player = **i;
+						if (player.score == highest_score) {
+							// Two players with the same score, is a draw.
+							winner = -1;
+						}
+						if (player.score > highest_score) {
+							winner = player.number;
+							playerVectorIndex = vectorIndex;
+							highest_score = player.score;
+						}
+						vectorIndex++;
+					}
+					if (winner != -1) {
+						players[playerVectorIndex]->rounds_won++;
+					}
+					
 					network::CommandSetVictoryScreen vscr;
 					vscr.data.time = server.getServerTime();
+					vscr.data.duration = 10000;
+					vscr.data.winner = winner;
 					server.sendAll(vscr);
 
-					network::CommandSetBroadcastText broadcast;
-					broadcast.data.time = server.getServerTime();
-					string text("PLACEHOLDER FOR VICTORY SCREEN 10 SECS");
-					strncpy(broadcast.data.text, text.c_str() , text.length());
-					broadcast.data.duration = 10000;
-					server.sendAll(broadcast);
 					currentStateBeginTimeDelay_ = 10000;
 				}
 			}
@@ -214,6 +245,7 @@ void NetworkMultiplayer::on_post_processing()
 					network::CommandSetGameStart start;
 					start.data.time = server.getServerTime();
 					start.data.delay = 100;
+					start.data.first_round = false;
 					server.sendAll(start);
 				} else {
 					currentState_ = State::DISPLAYING_SCREEN;
@@ -228,8 +260,19 @@ void NetworkMultiplayer::on_post_processing()
 				network::CommandSetGameStart start;
 				start.data.time = server.getServerTime();
 				start.data.delay = 0;
+				start.data.first_round = false;
 				server.sendAll(start);
 
+				// Reset all player stats
+				std::vector<Player *>::iterator i;
+				bool excludeInputs = true;
+				bool excludeStats = false;
+				auto &players = *(main_.getServer().getGame().players);
+				for (i=std::begin(players); i!=std::end(players); ++i) {
+					auto &player = **i;
+					player.reset(excludeInputs, excludeStats);
+				}
+				
 				currentStateBeginTime_ = server.getServerTime();
 				currentState_ = State::DONE;
 				game_running = true;
@@ -260,4 +303,43 @@ GameplayObject *NetworkMultiplayer::generate_powerup(bool force)
 		main_.getServer().sendAll(genpow);
 	}
 	return powerup;
+}
+
+void NetworkMultiplayer::process_keep_alives()
+{
+	int keepAliveEveryMs = 5000;
+	int keepAliveTimeoutMs = 10000;
+
+	auto &server = main_.getServer();
+
+	std::map<int, std::shared_ptr<network::Client>>::iterator i;
+	for (i = std::begin(server.getClients()); i!=std::end(server.getClients()); ++i) {
+		auto &client = i->second;
+		auto &cl(*client);
+		switch (cl.getKeepAliveState()) {
+			case network::Client::KeepAliveState::IDLE:
+			{
+				// Send the first keep alive packet
+				cl.setKeepAliveState(network::Client::KeepAliveState::CHECKING);
+				cl.setLastKeepAlive(server.getServerTime());
+				network::CommandKeepAlive alive;
+				alive.data.time = server.getServerTime();
+				cl.send(alive);
+				break;
+			}
+			case network::Client::KeepAliveState::CHECKING:
+				if (server.getServerTime() - cl.getLastKeepAlive() > keepAliveTimeoutMs) {
+					cl.setKeepAliveState(network::Client::KeepAliveState::ZOMBIE);
+				}
+				break;
+			case network::Client::KeepAliveState::CONFIRMED:
+				if (server.getServerTime() - cl.getLastKeepAlive() > keepAliveEveryMs) {
+					cl.setKeepAliveState(network::Client::KeepAliveState::IDLE);
+				}
+				break;
+			case network::Client::KeepAliveState::ZOMBIE:
+				// Simply wait until the server cleans the socket up
+				break;
+		}
+	}
 }

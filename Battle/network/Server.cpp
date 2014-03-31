@@ -174,6 +174,11 @@ void Server::listen() {
 
 	/* open the server socket */
 	server = SDLNet_TCP_Open(&ip);
+
+	//I've confirmed with strace that libsdl 1.2 sets the TCP_NODELAY flag correctly
+	//int yes = 1; 
+	//setsockopt(sock->channel, IPPROTO_TCP, TCP_NODELAY, (char*)&yes, sizeof(yes)); 
+
 	if (!server) {
 		log(format("SDLNet_TCP_Open: %s\n", SDLNet_GetError()), Logger::Priority::DEBUG);
 		return;
@@ -303,6 +308,7 @@ void Server::poll() {
 	vector<int> dead_clients;
 	for (map<int, std::shared_ptr<Client>>::iterator i = clients_.begin(); i != clients_.end(); i++) {
 		auto &client = i->second;
+		bool disconnectSocket = false;
 		if (SDLNet_SocketReady(client->socket())) {
 			char buffer[16384] = {0x00};
 			int bytesReceived = SDLNet_TCP_Recv(client->socket(), buffer, sizeof (buffer));
@@ -312,18 +318,26 @@ void Server::poll() {
 				while (client->parse())
 					;
 			} else {
-
-				// We now re-create the socket set every iteration
-				// SDLNet_TCP_DelSocket(set, client->socket());
-
-				// Close the old socket, even if it's dead... 
-				SDLNet_TCP_Close(client->socket());
-
-				// Mark for deletion
-				dead_clients.push_back(client->id());
-
-				log(format("Cleaning up client: %d\n", client->id()), Logger::Priority::INFO);
+				disconnectSocket = true;
 			}
+		}
+
+		// If a client is marked as a zombie, we want it dead
+		if (client->getKeepAliveState() == Client::KeepAliveState::ZOMBIE) {
+			disconnectSocket = true;
+		}
+		
+		if (disconnectSocket) {
+			// We now re-create the socket set every iteration
+			// SDLNet_TCP_DelSocket(set, client->socket());
+
+			// Close the old socket, even if it's dead... 
+			SDLNet_TCP_Close(client->socket());
+
+			// Mark for deletion
+			dead_clients.push_back(client->id());
+
+			log(format("Cleaning up client: %d\n", client->id()), Logger::Priority::INFO);
 		}
 	}
 
@@ -348,11 +362,11 @@ void Server::poll() {
 		strncpy(broadcast.data.text, text.c_str(), text.length());
 		broadcast.data.duration = 2000;
 		sendAll(broadcast);
-	}
 
-	ServerState *newstate = getState()->check_self(*this);
-	if (newstate) {
-		setState(newstate);
+		ServerState *newstate = getState()->check_self(*this);
+		if (newstate) {
+			setState(newstate);
+		}
 	}
 
 }
@@ -434,6 +448,23 @@ size_t Server::numActiveClients() {
 	for (map<int, std::shared_ptr<Client>>::iterator i = clients_.begin(); i != clients_.end(); i++)
 		if (i->second->getState() == Client::State::ACTIVE)
 			num++;
+
+	return num;
+}
+
+size_t Server::numUndeadActiveClients() {
+	size_t num = 0;
+	for (map<int, std::shared_ptr<Client>>::iterator i = clients_.begin(); i != clients_.end(); i++)
+	{
+		try {
+			Player &player(player_util::get_player_by_id(*main_, i->second->getClientId()));
+			if (i->second->getState() == Client::State::ACTIVE && !player.is_dead)
+				num++;
+		}
+		catch (std::runtime_error &err) {
+			// log this
+		}
+	}
 
 	return num;
 }

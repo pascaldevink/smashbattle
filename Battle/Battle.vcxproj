@@ -130,6 +130,7 @@
     <ClCompile Include="Mission.cpp" />
     <ClCompile Include="MissionSelect.cpp" />
     <ClCompile Include="NetworkMultiplayer.cpp" />
+    <ClCompile Include="NetworkMultiplayerRoundEnd.cpp" />
     <ClCompile Include="network\Client.cpp" />
     <ClCompile Include="network\ClientNetworkMultiplayer.cpp" />
     <ClCompile Include="network\CommandProcessor.cpp" />
@@ -189,6 +190,8 @@
     <ClInclude Include="commands\CommandCommunicationTokenAck.hpp" />
     <ClInclude Include="commands\CommandDelPlayer.hpp" />
     <ClInclude Include="commands\CommandGeneratePowerup.h" />
+    <ClInclude Include="commands\CommandKeepAlive.hpp" />
+    <ClInclude Include="commands\CommandKeepAliveOk.hpp" />
     <ClInclude Include="commands\CommandPing.hpp" />
     <ClInclude Include="commands\CommandPong.hpp" />
     <ClInclude Include="commands\CommandRemovePowerup.hpp" />
@@ -209,6 +212,7 @@
     <ClInclude Include="commands\CommandSetPosition.hpp" />
     <ClInclude Include="commands\CommandSetServerReady.hpp" />
     <ClInclude Include="commands\CommandSetSpectating.hpp" />
+    <ClInclude Include="commands\CommandSetVictoryScreen.hpp" />
     <ClInclude Include="commands\CommandShotFired.hpp" />
     <ClInclude Include="commands\CommandUpdateTile.hpp" />
     <ClInclude Include="ControlsOptions.h" />
@@ -234,6 +238,7 @@
     <ClInclude Include="Mission.h" />
     <ClInclude Include="MissionSelect.h" />
     <ClInclude Include="NetworkMultiplayer.h" />
+    <ClInclude Include="NetworkMultiplayerRoundEnd.h" />
     <ClInclude Include="network\Client.h" />
     <ClInclude Include="network\ClientNetworkMultiplayer.h" />
     <ClInclude Include="network\Command.hpp" />

@@ -29,8 +29,8 @@ void ServerStateGameStarted::initialize(Server &server) const
 
 		server.ignoreClientInputFor(3000);
 
-		player.hitpoints = 100;
-		player.score = 0;
+		player.reset();
+		
 		player_util::unset_input(player);
 		level_util::set_player_start(player, server.getLevel());
 
@@ -56,7 +56,7 @@ void ServerStateGameStarted::initialize(Server &server) const
 		hp.data.time = server.getServerTime();
 		hp.data.client_id = player.number;
 		hp.data.hitpoints = player.hitpoints;
-		client->send(hp);
+		server.sendAll(hp);
 
 		// Set their correct positions
 		CommandSetPlayerData pd;
@@ -79,6 +79,7 @@ void ServerStateGameStarted::initialize(Server &server) const
 		CommandSetGameStart gs;
 		gs.data.time = server.getServerTime();
 		gs.data.delay = 1000;
+		gs.data.first_round = true;
 		server.sendAll(gs);
 	}
 }
@@ -118,7 +119,7 @@ void ServerStateGameStarted::execute(Server &server, Client &client) const
 		once = false;
 		CommandSetBroadcastText broadcast;
 		broadcast.data.time = server.getServerTime();
-		string text("WELCOME YOU ARE NOW IN THE GAME");
+		string text("WELCOME YOU JOINED THE GAME");
 		strncpy(broadcast.data.text, text.c_str() , text.length());
 		broadcast.data.duration = 2000;
 		server.sendAll(broadcast);
@@ -131,13 +132,13 @@ ServerState * ServerStateGameStarted::check_self(Server &server) const
 	if (server.numActiveClients() == 0) {
 		newstate = new ServerStateAcceptClients();
 	}
-	else if (server.numActiveClients() == 1) {
+	else if (server.numUndeadActiveClients() == 1) {
 		newstate = new ServerStateAcceptClients();
 
 		CommandSetBroadcastText broadcast;
 		broadcast.data.time = server.getServerTime();
-		string text("YOU WIN");
-		strncpy(broadcast.data.text, text.c_str() , text.length());
+		string text("RESTARTING GAME");
+		strncpy(broadcast.data.text, text.c_str(), text.length());
 		broadcast.data.duration = 2000;
 		server.sendAll(broadcast);
 	}

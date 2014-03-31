@@ -41,8 +41,12 @@ protected:
 	virtual void handle_event(GameInput &input, SDL_Event &event);
 
 	virtual void draw_menu();
+        
+        virtual int get_player_number(Player &player);
 
 	bool ready;
+
+	Main &main_;
 
 private:
 	void init();
@@ -71,6 +75,4 @@ private:
 	GameInput * input;
 
 	int selected_item;
-
-	Main &main_;
 };

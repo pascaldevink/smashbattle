@@ -21,6 +21,8 @@
 
 #include "Player.h"
 
+int ServerClientVersion = 1;
+
 namespace network {
 
 using std::for_each;
@@ -416,6 +418,9 @@ bool ServerClient::process(std::unique_ptr<Command> command)
 		case Command::Types::SetVictoryScreen:
 			process(dynamic_cast<CommandSetVictoryScreen *>(command.get()));
 			break;
+		case Command::Types::KeepAlive:
+			process(dynamic_cast<CommandKeepAlive *>(command.get()));
+			break;
 		default:
 			log(format("received command with type: %d", command.get()->getType()), Logger::Priority::CONSOLE);
 	}
@@ -640,7 +645,6 @@ bool ServerClient::process(CommandSetPlayerAmmo *command)
 
 bool ServerClient::process(CommandSetBroadcastText *command)
 {
-	std::cout << "BROADCAST TEXT: " << command->data.text << std::endl;
 	getGame().set_broadcast(command->data.text, command->data.duration);
 	return true;
 }
@@ -651,6 +655,7 @@ bool ServerClient::process(CommandSetPlayerDeath *command)
 		Player &player(player_util::get_player_by_id(*main_, command->data.client_id));
 
 		player.is_dead = command->data.is_dead;
+		player.dead_start = SDL_GetTicks();
 	}
 	catch (std::runtime_error &err) {
 		log(err.what(), Logger::Priority::CONSOLE);
@@ -696,6 +701,17 @@ bool ServerClient::process(CommandSetPlayerScore *command)
 bool ServerClient::process(CommandSetGameStart *command)
 {
 	main_->getServerClient().resumeGameIn(command->data.delay);
+	
+	std::vector<Player *>::iterator i;
+	bool excludeInputs = true;
+	bool excludeStats = command->data.first_round ? false : true;
+	auto &players = *main_->getServerClient().getGame().players;
+	for (i=std::begin(players); i!=std::end(players); ++i) {
+		auto &player = **i;
+		
+		player.reset(excludeInputs, excludeStats);
+	}
+	
 	return true;
 }
 
@@ -846,17 +862,30 @@ bool ServerClient::process(CommandServerFull *command)
 bool ServerClient::process(CommandSetVictoryScreen *command)
 {
 	try {
-		NetworkMultiplayerRoundEnd vscr(*main_, 5000);
+		NetworkMultiplayerRoundEnd vscr(*main_, command->data.duration);
 
 		auto &players = *(getGame().players);
 		std::vector<Player *>::iterator i;
-		for (i=std::begin(players); i!=std::end(players); ++i) {
-			vscr.add_player(*i);
-		}
 		vscr.winner = NULL;
+		for (i=std::begin(players); i!=std::end(players); ++i) {
+			auto &player = *i;
+			vscr.add_player(player);
+			if (command->data.winner != -1 && player->number == command->data.winner) {
+				vscr.winner = player;
+			}
+		}
 		vscr.round = 1;
 		
 		vscr.run();
+		
+		// Reset all player stats now that we have displayed them
+		bool excludeInputs = false;
+		bool excludeStats = false;
+		for (i=std::begin(players); i!=std::end(players); ++i) {
+			auto &player = **i;
+
+			player.reset(excludeInputs, excludeStats);
+		}
 
 		return false;
 
@@ -865,6 +894,15 @@ bool ServerClient::process(CommandSetVictoryScreen *command)
 	{
 		log(format("failure in process(CommandSetSpectating): %s", err.what()), Logger::Priority::ERROR);
 	}
+
+	return true;
+}
+
+bool ServerClient::process(CommandKeepAlive *command)
+{
+	CommandKeepAliveOk repl;
+	repl.data.time = command->data.time;
+	send(repl);
 
 	return true;
 }
